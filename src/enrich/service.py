@@ -161,11 +161,17 @@ class EnrichmentService:
         One bad address does not fail the batch. The rate limiter bounds actual
         provider concurrency regardless of batch size.
         """
-        tasks = [
-            self.enrich(EnrichmentRequest(email=email, skip_cache=skip_cache))
-            for email in emails
-        ]
-        settled = await asyncio.gather(*tasks, return_exceptions=True)
+        async def run_one(raw: str) -> EnrichmentResult:
+            # Build the request inside the task. Constructing it eagerly in a
+            # comprehension would let a malformed address raise synchronously
+            # and abort the whole batch before gather() ever runs.
+            return await self.enrich(
+                EnrichmentRequest(email=raw, skip_cache=skip_cache)
+            )
+
+        settled = await asyncio.gather(
+            *(run_one(email) for email in emails), return_exceptions=True
+        )
 
         results: list[EnrichmentResult] = []
         failed = 0
