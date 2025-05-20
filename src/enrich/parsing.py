@@ -125,13 +125,87 @@ def guess_name_parts(local_part: str) -> tuple[str | None, str | None]:
 
     if not tokens:
         return None, None
-    if len(tokens) == 1:
-        # A lone token is ambiguous: "jane" is a first name, "jdoe" is a
-        # squashed full name we cannot split reliably. Treat it as a first
-        # name only, and never invent a surname.
-        return tokens[0].capitalize(), None
 
-    return tokens[0].capitalize(), tokens[-1].capitalize()
+    if len(tokens) == 1:
+        # A lone token is ambiguous. "jane" is a plausible first name, but
+        # "jdoe" is an initial glued to a surname and "jsmith2" is the same.
+        # Emitting "Jdoe" as a first name puts a non-existent human into the
+        # caller's CRM, which is worse than returning nothing, so a lone token
+        # must actually look like a name before we use it.
+        token = tokens[0]
+        if not _is_name_like(token):
+            return None, None
+        return token.capitalize(), None
+
+    first, last = tokens[0], tokens[-1]
+    if not (_is_name_like(first) and _is_name_like(last)):
+        return None, None
+
+    return first.capitalize(), last.capitalize()
+
+
+_VOWELS: frozenset[str] = frozenset("aeiouy")
+
+# Common surnames that appear glued to a leading initial ("jdoe", "msmith").
+# Kept deliberately small: it only needs to cover the high-frequency cases,
+# because the fallback rule below is what does the general work.
+_COMMON_SURNAMES: frozenset[str] = frozenset(
+    {
+        "doe", "smith", "jones", "brown", "davis", "miller", "wilson", "moore",
+        "taylor", "anderson", "thomas", "jackson", "white", "harris", "martin",
+        "thompson", "garcia", "martinez", "robinson", "clark", "rodriguez",
+        "lewis", "lee", "walker", "hall", "allen", "young", "king", "wright",
+        "scott", "green", "baker", "adams", "nelson", "hill", "campbell",
+        "mitchell", "roberts", "carter", "phillips", "evans", "turner",
+        "parker", "collins", "edwards", "stewart", "morris", "murphy",
+        "cook", "rogers", "morgan", "peterson", "cooper", "reed", "bailey",
+        "bell", "gomez", "kelly", "howard", "ward", "cox", "diaz", "richardson",
+        "wood", "watson", "brooks", "bennett", "gray", "james", "reyes",
+        "cruz", "hughes", "price", "myers", "long", "foster", "sanders",
+        "ross", "morales", "powell", "sullivan", "russell", "ortiz", "jenkins",
+        "gutierrez", "perry", "butler", "barnes", "fisher", "johnson",
+        "williams", "jonson", "gonzalez", "hernandez", "lopez", "perez",
+    }
+)
+
+
+def _is_name_like(token: str) -> bool:
+    """Whether a token plausibly is a human name component.
+
+    Rejects two shapes. First, an initial glued to a surname (``jdoe``,
+    ``msmith``). Second, keyboard noise (``xx``, ``bcdfg``), which would
+    otherwise sail through as a capitalized word.
+
+    The rule is deliberately narrow rather than an allow-list of valid letter
+    clusters. An allow-list silently drops any name whose onset was not
+    anticipated, and those misses fall hardest on non-English names, which is
+    a much worse failure than occasionally accepting a token we should not.
+    """
+    lowered = token.lower()
+    # Two characters is the floor: "Li", "Wu", and "Bo" are real given names
+    # and surnames, and excluding them would drop a large population.
+    if len(lowered) < 2 or not lowered.isalpha():
+        return False
+
+    # Every real name contains a vowel. Catches "bcdfg", "ttt", "xx".
+    if not any(char in _VOWELS for char in lowered):
+        return False
+
+    # A single leading consonant followed by a recognised surname is an
+    # initial-plus-surname, not a given name.
+    if lowered[0] not in _VOWELS and lowered[1:] in _COMMON_SURNAMES:
+        return False
+
+    # Reject a long consonant run, which mashed-together identifiers have and
+    # names do not. The threshold is five rather than four so that genuine
+    # names such as "Schmidt" and "Dvorzhak" survive.
+    run = 0
+    for char in lowered:
+        run = 0 if char in _VOWELS else run + 1
+        if run >= 5:
+            return False
+
+    return True
 
 
 def company_from_domain(domain: str) -> str | None:
