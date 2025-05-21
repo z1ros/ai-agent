@@ -42,9 +42,7 @@ class TestOpsEndpoints:
 
 class TestEnrichEndpoint:
     def test_enriches_a_corporate_address(self, client: TestClient) -> None:
-        response = client.post(
-            "/v1/enrich", json={"email": "jane.doe@acmerobotics.com"}
-        )
+        response = client.post("/v1/enrich", json={"email": "jane.doe@acmerobotics.com"})
         assert response.status_code == 200
 
         body = response.json()
@@ -74,6 +72,36 @@ class TestEnrichEndpoint:
             if value is not None:
                 assert "confidence" in value
                 assert "source" in value
+
+
+class TestSignatureParsing:
+    """Regression tests for signature block field extraction."""
+
+    def test_title_above_name_does_not_become_the_name(self, client: TestClient) -> None:
+        """A job title on the first line must not be read as the person's name.
+
+        The guard excluding the title line compared a str to an Attribute, so
+        it was always true and 'Chief Technology Officer' was written into
+        full_name at HIGH confidence. Found by mypy's comparison-overlap check.
+        """
+        signature = "Chief Technology Officer\nJane Doe\nAcme Robotics\n"
+        body = client.post(
+            "/v1/enrich",
+            json={"email": "jane.doe@acme.com", "signature_block": signature},
+        ).json()
+
+        assert body["profile"]["full_name"]["value"] == "Jane Doe"
+        assert body["profile"]["title"]["value"] == "Chief Technology Officer"
+
+    def test_name_above_title_still_works(self, client: TestClient) -> None:
+        signature = "Jane Doe\nChief Technology Officer\nAcme Robotics\n"
+        body = client.post(
+            "/v1/enrich",
+            json={"email": "jane.doe@acme.com", "signature_block": signature},
+        ).json()
+
+        assert body["profile"]["full_name"]["value"] == "Jane Doe"
+        assert body["profile"]["title"]["value"] == "Chief Technology Officer"
 
 
 class TestBatchEndpoint:

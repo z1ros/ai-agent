@@ -14,7 +14,14 @@ from __future__ import annotations
 
 import re
 
-from ..models import Attribute, Confidence, EmailKind, ParsedEmail, PersonProfile, ProviderResponse
+from ..models import (
+    Attribute,
+    Confidence,
+    EmailKind,
+    ParsedEmail,
+    PersonProfile,
+    ProviderResponse,
+)
 from ..parsing import company_from_domain, guess_name_parts
 from .base import EnrichmentProvider, register_provider
 
@@ -28,16 +35,52 @@ _LINKEDIN_RE = re.compile(
     re.IGNORECASE,
 )
 _TITLE_KEYWORDS = (
-    "ceo", "cto", "cfo", "coo", "cmo", "founder", "co-founder", "cofounder",
-    "president", "director", "manager", "head of", "lead", "engineer",
-    "developer", "designer", "analyst", "consultant", "specialist",
-    "coordinator", "associate", "partner", "principal", "architect",
-    "scientist", "researcher", "intern", "vp", "vice president", "chief",
+    "ceo",
+    "cto",
+    "cfo",
+    "coo",
+    "cmo",
+    "founder",
+    "co-founder",
+    "cofounder",
+    "president",
+    "director",
+    "manager",
+    "head of",
+    "lead",
+    "engineer",
+    "developer",
+    "designer",
+    "analyst",
+    "consultant",
+    "specialist",
+    "coordinator",
+    "associate",
+    "partner",
+    "principal",
+    "architect",
+    "scientist",
+    "researcher",
+    "intern",
+    "vp",
+    "vice president",
+    "chief",
 )
 
 
+# Separator characters used decoratively in signature blocks. Written as
+# escapes because the em dash and en dash are visually ambiguous in source.
+_SIGNATURE_SEPARATORS = "|\u00b7\u2014\u2013-"
+
+
 def _clean_line(line: str) -> str:
-    return line.strip().strip("|·—–-").strip()
+    return line.strip().strip(_SIGNATURE_SEPARATORS).strip()
+
+
+def _looks_like_a_title(line: str) -> bool:
+    """Whether a line reads as a job title rather than a person's name."""
+    lowered = line.lower()
+    return any(keyword in lowered for keyword in _TITLE_KEYWORDS)
 
 
 class InferenceProvider(EnrichmentProvider):
@@ -138,21 +181,27 @@ class InferenceProvider(EnrichmentProvider):
                 )
 
         for line in lines:
-            lowered = line.lower()
-            if any(keyword in lowered for keyword in _TITLE_KEYWORDS) and len(line) < 80:
+            if _looks_like_a_title(line) and len(line) < 80:
                 profile.title = Attribute(
                     value=line, confidence=Confidence.HIGH, source=self.name
                 )
                 break
 
         # The first short, alphabetic, multi-word line is conventionally the
-        # sender's name.
+        # sender's name. The title line is excluded by value: an identity check
+        # against profile.title compared a str to an Attribute and was always
+        # true, which let "Chief Technology Officer" become the full name when
+        # the title appeared above the name in the block.
+        title_value = profile.title.value if profile.title else None
         for line in lines[:3]:
             words = line.split()
             if (
                 2 <= len(words) <= 4
-                and all(word.replace(".", "").replace("-", "").isalpha() for word in words)
-                and line is not profile.title
+                and all(
+                    word.replace(".", "").replace("-", "").isalpha() for word in words
+                )
+                and line != title_value
+                and not _looks_like_a_title(line)
             ):
                 profile.full_name = Attribute(
                     value=line, confidence=Confidence.HIGH, source=self.name
