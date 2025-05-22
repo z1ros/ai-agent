@@ -86,9 +86,7 @@ def make_settings(**overrides) -> Settings:
 
 @pytest.fixture
 def service() -> EnrichmentService:
-    return EnrichmentService(
-        settings=make_settings(), providers=[InferenceProvider()]
-    )
+    return EnrichmentService(settings=make_settings(), providers=[InferenceProvider()])
 
 
 class TestEnrich:
@@ -130,9 +128,7 @@ class TestEnrich:
         assert result.profile.full_name is None
         assert result.profile.company is not None
 
-    async def test_no_reply_is_skipped_entirely(
-        self, service: EnrichmentService
-    ) -> None:
+    async def test_no_reply_is_skipped_entirely(self, service: EnrichmentService) -> None:
         result = await service.enrich(EnrichmentRequest(email="noreply@acme.com"))
         assert result.providers_queried == []
         assert result.profile.is_empty()
@@ -174,9 +170,7 @@ class TestPartialFailure:
         good = StubProvider(
             "good",
             PersonProfile(
-                company=Attribute(
-                    value="Acme", confidence=Confidence.HIGH, source="good"
-                )
+                company=Attribute(value="Acme", confidence=Confidence.HIGH, source="good")
             ),
         )
         service = EnrichmentService(
@@ -281,9 +275,7 @@ class TestCaching:
 
 class TestBatch:
     async def test_enriches_many(self, service: EnrichmentService) -> None:
-        result = await service.enrich_batch(
-            ["jane.doe@acme.com", "ivan.petrov@corp.io"]
-        )
+        result = await service.enrich_batch(["jane.doe@acme.com", "ivan.petrov@corp.io"])
         assert result.total == 2
         assert result.succeeded == 2
         assert result.failed == 0

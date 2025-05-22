@@ -55,7 +55,9 @@ class TestMerge:
         assert merge_profiles([]).is_empty()
 
     def test_provenance_survives_merging(self) -> None:
-        merged = merge_profiles([response("clearbit", title=attr("CTO", Confidence.HIGH, "clearbit"))])
+        merged = merge_profiles(
+            [response("clearbit", title=attr("CTO", Confidence.HIGH, "clearbit"))]
+        )
         assert merged.title.source == "clearbit"
 
 
@@ -112,9 +114,7 @@ class TestNameReconciliation:
         assert merged.full_name.confidence is Confidence.LOW
 
     def test_single_word_full_name_is_left_alone(self) -> None:
-        merged = merge_profiles(
-            [response("a", full_name=attr("Cher", Confidence.HIGH))]
-        )
+        merged = merge_profiles([response("a", full_name=attr("Cher", Confidence.HIGH))])
         assert merged.first_name is None
 
 
@@ -161,9 +161,7 @@ class TestTTLCache:
         await cache.clear()
         assert await cache.get("k") is None
 
-    @pytest.mark.parametrize(
-        ("ttl", "max_entries"), [(-1, 10), (60, 0)]
-    )
+    @pytest.mark.parametrize(("ttl", "max_entries"), [(-1, 10), (60, 0)])
     def test_rejects_invalid_construction(self, ttl: int, max_entries: int) -> None:
         with pytest.raises(ValueError):
             TTLCache(ttl_seconds=ttl, max_entries=max_entries)
@@ -245,9 +243,7 @@ class TestRetryAsync:
             raise ProviderTimeoutError("p", "timeout")
 
         with pytest.raises(ProviderError):
-            await retry_async(
-                operation, max_retries=2, base_delay=0.001, provider="p"
-            )
+            await retry_async(operation, max_retries=2, base_delay=0.001, provider="p")
 
     async def test_does_not_retry_permanent_errors(self) -> None:
         calls = 0
@@ -258,7 +254,5 @@ class TestRetryAsync:
             raise ProviderError("p", "bad credentials")
 
         with pytest.raises(ProviderError):
-            await retry_async(
-                operation, max_retries=5, base_delay=0.001, provider="p"
-            )
+            await retry_async(operation, max_retries=5, base_delay=0.001, provider="p")
         assert calls == 1

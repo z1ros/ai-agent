@@ -77,13 +77,19 @@ def _reconcile_names(profile: PersonProfile) -> None:
 
     full_rank = _CONFIDENCE_RANK[profile.full_name.confidence]
 
-    if profile.first_name is None or _CONFIDENCE_RANK[profile.first_name.confidence] < full_rank:
+    if (
+        profile.first_name is None
+        or _CONFIDENCE_RANK[profile.first_name.confidence] < full_rank
+    ):
         profile.first_name = Attribute(
             value=parts[0],
             confidence=profile.full_name.confidence,
             source=profile.full_name.source,
         )
-    if profile.last_name is None or _CONFIDENCE_RANK[profile.last_name.confidence] < full_rank:
+    if (
+        profile.last_name is None
+        or _CONFIDENCE_RANK[profile.last_name.confidence] < full_rank
+    ):
         profile.last_name = Attribute(
             value=parts[-1],
             confidence=profile.full_name.confidence,

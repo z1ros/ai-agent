@@ -7,7 +7,7 @@ a precise error instead of propagating as ``None`` into downstream code.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Annotated, Any
 
@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Confidence(str, Enum):

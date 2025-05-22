@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from enrich.models import EmailKind
 from enrich.parsing import (
@@ -87,7 +88,9 @@ class TestGuessNameParts:
             ("xiu.li", ("Xiu", "Li")),
         ],
     )
-    def test_extracts_names(self, local: str, expected: tuple[str | None, str | None]) -> None:
+    def test_extracts_names(
+        self, local: str, expected: tuple[str | None, str | None]
+    ) -> None:
         assert guess_name_parts(local) == expected
 
     @pytest.mark.parametrize("local", ["jdoe", "msmith", "jjones", "bwilliams"])
@@ -149,5 +152,5 @@ class TestParseEmail:
 
     def test_result_is_immutable(self) -> None:
         parsed = parse_email("jane@acme.com")
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             parsed.domain = "evil.com"  # type: ignore[misc]

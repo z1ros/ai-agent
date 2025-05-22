@@ -74,9 +74,7 @@ def build_provider(name: str) -> EnrichmentProvider:
         factory = _REGISTRY[name]
     except KeyError:
         available = ", ".join(sorted(_REGISTRY)) or "none"
-        raise ValueError(
-            f"unknown provider {name!r} (registered: {available})"
-        ) from None
+        raise ValueError(f"unknown provider {name!r} (registered: {available})") from None
     return factory()
 
 
