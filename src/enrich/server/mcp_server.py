@@ -126,7 +126,7 @@ class EnrichmentMCPServer:
                     return _error(f"unknown tool: {name}")
         except InvalidEmailError as exc:
             return _error(f"invalid email: {exc}")
-        except Exception as exc:  # noqa: BLE001 - surface everything to the client
+        except Exception as exc:
             logger.exception("tool call failed", extra={"tool": name})
             return _error(f"{type(exc).__name__}: {exc}")
 
@@ -192,7 +192,9 @@ async def serve_stdio() -> None:
     handler = EnrichmentMCPServer()
     server: Server = Server("email-enrichment")
 
-    @server.list_tools()
+    # The MCP SDK's decorators are untyped, so strict mode cannot see through
+    # them. The handler bodies below are still fully checked.
+    @server.list_tools()  # type: ignore[untyped-decorator]
     async def _list_tools() -> list[Tool]:
         return [
             Tool(
@@ -203,12 +205,11 @@ async def serve_stdio() -> None:
             for tool in TOOL_DEFINITIONS
         ]
 
-    @server.call_tool()
+    @server.call_tool()  # type: ignore[untyped-decorator]
     async def _call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         response = await handler.call_tool(name, arguments)
         return [
-            TextContent(type="text", text=block["text"])
-            for block in response["content"]
+            TextContent(type="text", text=block["text"]) for block in response["content"]
         ]
 
     logger.info(

@@ -105,7 +105,11 @@ def _build_settings() -> Settings:
         "log_format": _env("LOG_FORMAT"),
     }
     provided = {key: value for key, value in candidates.items() if value is not None}
-    return Settings(**provided)
+    # Values arrive as strings because that is all an environment can hold;
+    # pydantic coerces each one to its declared field type during validation.
+    # model_validate takes the mapping as data rather than typed kwargs, which
+    # is both the correct entry point for this and type-checkable.
+    return Settings.model_validate(provided)
 
 
 @lru_cache(maxsize=1)

@@ -67,7 +67,8 @@ app = FastAPI(
 
 def get_service(request: Request) -> EnrichmentService:
     """Dependency handing the shared service to route handlers."""
-    return request.app.state.service
+    service: EnrichmentService = request.app.state.service
+    return service
 
 
 ServiceDep = Annotated[EnrichmentService, Depends(get_service)]
@@ -129,9 +130,7 @@ async def enrich(request: EnrichmentRequest, service: ServiceDep) -> EnrichmentR
     return await service.enrich(request)
 
 
-@app.post(
-    "/v1/enrich/batch", response_model=BatchEnrichmentResult, tags=["enrichment"]
-)
+@app.post("/v1/enrich/batch", response_model=BatchEnrichmentResult, tags=["enrichment"])
 async def enrich_batch(
     request: BatchEnrichmentRequest, service: ServiceDep
 ) -> BatchEnrichmentResult:

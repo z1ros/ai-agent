@@ -20,14 +20,15 @@ from .models import (
     BatchEnrichmentResult,
     EnrichmentRequest,
     EnrichmentResult,
+    ParsedEmail,
     ProviderResponse,
 )
 from .parsing import parse_email
-from .providers.base import EnrichmentProvider, build_provider
-from .resilience import TokenBucket, retry_async
 
 # Importing the module registers the provider as a side effect.
 from .providers import inference as _inference  # noqa: F401
+from .providers.base import EnrichmentProvider, build_provider
+from .resilience import TokenBucket, retry_async
 
 logger = get_logger(__name__)
 
@@ -47,9 +48,11 @@ class EnrichmentService:
         self.settings = settings or get_settings()
 
         # Injectable for tests, built from config otherwise.
-        self.providers = providers if providers is not None else [
-            build_provider(name) for name in self.settings.enabled_providers
-        ]
+        self.providers = (
+            providers
+            if providers is not None
+            else [build_provider(name) for name in self.settings.enabled_providers]
+        )
 
         if cache is not None:
             self.cache = cache
@@ -107,12 +110,9 @@ class EnrichmentService:
 
             cache_key = self._cache_key(parsed.address, request.signature_block)
 
-            if not request.skip_cache:
-                if hit := await self.cache.get(cache_key):
-                    logger.info(
-                        "cache hit", extra={"email_domain": parsed.domain}
-                    )
-                    return hit.model_copy(update={"cached": True})
+            if not request.skip_cache and (hit := await self.cache.get(cache_key)):
+                logger.info("cache hit", extra={"email_domain": parsed.domain})
+                return hit.model_copy(update={"cached": True})
 
             logger.info(
                 "enrichment started",
@@ -161,13 +161,12 @@ class EnrichmentService:
         One bad address does not fail the batch. The rate limiter bounds actual
         provider concurrency regardless of batch size.
         """
+
         async def run_one(raw: str) -> EnrichmentResult:
             # Build the request inside the task. Constructing it eagerly in a
             # comprehension would let a malformed address raise synchronously
             # and abort the whole batch before gather() ever runs.
-            return await self.enrich(
-                EnrichmentRequest(email=raw, skip_cache=skip_cache)
-            )
+            return await self.enrich(EnrichmentRequest(email=raw, skip_cache=skip_cache))
 
         settled = await asyncio.gather(
             *(run_one(email) for email in emails), return_exceptions=True
@@ -195,7 +194,7 @@ class EnrichmentService:
     # -- internals -------------------------------------------------------
 
     async def _query_providers(
-        self, parsed, signature_block: str | None
+        self, parsed: ParsedEmail, signature_block: str | None
     ) -> tuple[list[ProviderResponse], dict[str, str], list[str]]:
         """Run every applicable provider concurrently, collecting failures.
 
@@ -234,7 +233,10 @@ class EnrichmentService:
         return responses, errors, queried
 
     async def _call_provider(
-        self, provider: EnrichmentProvider, parsed, signature_block: str | None
+        self,
+        provider: EnrichmentProvider,
+        parsed: ParsedEmail,
+        signature_block: str | None,
     ) -> ProviderResponse:
         """Invoke one provider under the rate limiter, timeout, and retry policy."""
         if provider.requires_network:
